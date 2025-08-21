@@ -7,6 +7,7 @@ This repository contains a docker compose stack with the following services:
 - prometheus
 - promtail
 - vault enterprise with raft backend
+- Redis
 
 ## Pre-requisites
 Install `taskfile` and `jq` with the following command:
