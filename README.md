@@ -68,3 +68,7 @@ Execute vault benchmark to test the performance of the vault and generate vault 
 vault namespace create vault-benchmark
 task benchmark
 ```
+Execute Redis Terraform to create dynamic users, and migrate static users from redis to Vault
+```shell
+task redis
+```
