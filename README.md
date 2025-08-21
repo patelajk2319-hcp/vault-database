@@ -1,4 +1,4 @@
-# docker-vault-stack
+# docker-vault-redis-stack
 
 ## Description
 This repository contains a docker compose stack with the following services:
@@ -17,7 +17,7 @@ Install `taskfile` and `jq` with the following command:
 
 Clone git repository:
 ```shell
-git clone https://github.com/nhsy-hcp/docker-vault-stack.git
+git clone https://github.com/patelajk2319-hcp/vault-database.git
 ```
 
 Create a `.env` file in the root folder with the following content:
