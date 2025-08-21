@@ -1,0 +1,131 @@
+# https://taskfile.dev
+version: '3'
+
+dotenv:
+  - .env
+
+tasks:
+  default:
+    aliases: ["all"]
+    cmds:
+      - task: up
+      - task: unseal
+
+  up:
+    preconditions:
+      - test -f .env
+      - test -f docker-compose.yml
+    cmds:
+      - docker compose up -d --pull=missing
+      - sleep 5
+      - |
+        echo "Grafana: http://localhost:3000"
+        echo "Prometheus: http://localhost:9090"
+        echo "Vault: http://localhost:8200"
+        echo "Redis: http://localhost:6379"
+    silent: true
+
+  vault-up:
+    preconditions:
+      - test -f .env
+      - test -f docker-compose.yml
+    cmds:
+      - docker compose up vault -d --pull=missing
+      - sleep 5
+      - |
+        echo "Vault: http://localhost:8200"
+    silent: true
+
+  down:
+    cmds:
+      - task: stop
+
+  restart:
+    cmds:
+      - docker compose restart vault
+
+  status:
+    cmds:
+      - vault status
+
+  init:
+    cmds:
+      - ./scripts/00_vault_init.sh
+
+  unseal:
+    cmds:
+      - ./scripts/20_vault_unseal.sh
+
+  backup:
+    cmds:
+      - vault operator raft snapshot save backup-`date +"%Y%m%d-%H%M"`.snap
+
+  rm:
+    aliases: ["clean"]
+    cmds:
+      - docker compose rm -sfv
+      - docker volume rm {{.STACK_NAME }}_grafana-data
+      - docker volume rm {{.STACK_NAME }}_loki-data
+      - docker volume rm {{.STACK_NAME }}_prometheus-data
+      - docker volume rm {{.STACK_NAME }}_promtail-data
+      - docker volume rm {{.STACK_NAME }}_vault-data
+      - docker volume rm {{.STACK_NAME }}_vault-logs
+      - docker volume rm {{.STACK_NAME }}_redis-data
+    ignore_error: true
+    vars:
+      STACK_NAME:
+        sh: basename "`pwd`"
+
+  benchmark:
+    cmds:
+      - vault-benchmark run -config=./benchmark/config.hcl
+
+  metrics:
+      cmds:
+        - |
+          curl -s --header "X-Vault-Token: $VAULT_TOKEN" "$VAULT_ADDR/v1/sys/metrics?format=prometheus"
+          
+  logs-vault:
+    cmds:
+      - docker compose logs -f vault
+
+  logs:
+    cmds:
+      - docker compose logs -f
+
+  stop:
+    cmds:
+      - docker compose stop
+
+  agent-up:
+    dir: ./tfc-agent
+    preconditions:
+      - test -f .env
+      - test -f docker-compose.yml
+    cmds:
+      - docker compose up -d --pull=missing
+
+  agent-down:
+    dir: ./tfc-agent
+    preconditions:
+      - test -f .env
+      - test -f docker-compose.yml
+    cmds:
+      - docker compose stop
+
+  ui:
+    cmds:
+      - open http://localhost:8200
+      - ./scripts/10_vault_vars.sh
+
+  pull:
+    cmds:
+      - docker compose pull
+    silent: true
+
+  dev:
+    preconditions:
+      - test -f .env
+    cmds:
+      - docker run --rm -p 8200:8200 --cap-add=IPC_LOCK -e VAULT_LICENSE=$VAULT_LICENSE hashicorp/vault-enterprise:latest server -dev -dev-root-token-id=root -dev-listen-address="0.0.0.0:8200"
+    silent: true
