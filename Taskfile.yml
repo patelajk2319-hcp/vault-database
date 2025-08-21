@@ -129,3 +129,10 @@ tasks:
     cmds:
       - docker run --rm -p 8200:8200 --cap-add=IPC_LOCK -e VAULT_LICENSE=$VAULT_LICENSE hashicorp/vault-enterprise:latest server -dev -dev-root-token-id=root -dev-listen-address="0.0.0.0:8200"
     silent: true
+
+  redis:
+    dir: labs/database/redis/
+    dotenv: ['../../../.env']
+    cmds:
+      - terraform init -upgrade
+      - terraform apply -auto-approve
