@@ -14,6 +14,11 @@ locals {
       username        = "vault-static-user-2"
       rotation_period = "3600" # 1hour (must be in seconds)
       description     = "This user was already in ELK and now will be managed by Vault"
+    },
+        {
+      username        = "vault-static-user-3"
+      rotation_period = "5000" 
+      description     = "This user was already in ELK and now will be managed by Vault"
     }
   ]
 }

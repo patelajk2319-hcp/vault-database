@@ -123,7 +123,7 @@ services:
 # ELASTIC AND KIBANA - ELK
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
-    container_name: elasticsearch
+    container_name: ${COMPOSE_PROJECT_NAME}_elasticsearch
     restart: unless-stopped
     networks:
       - vault-network
@@ -172,7 +172,7 @@ services:
   # Kibana with TLS
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.0
-    container_name: kibana
+    container_name: ${COMPOSE_PROJECT_NAME}_kibana
     restart: unless-stopped
     networks:
       - vault-network

@@ -70,6 +70,17 @@ curl -X POST "https://elasticsearch:9200/_security/user/vault-static-user-2" \
     "email": "vault-user2@vault.local"
   }'
 
+  curl -X POST "https://elasticsearch:9200/_security/user/vault-static-user-3" \
+  -H "Content-Type: application/json" \
+  --cacert /certs/ca.crt \
+  -u "elastic:password123" \
+  -d '{
+    "password": "vault_password456",
+    "roles": ["kibana_user"],
+    "full_name": "Vault Static User 3",
+    "email": "vault-user3@vault.local"
+  }'
+
 # Create read-only user
 curl -X POST "https://elasticsearch:9200/_security/user/readonly-user" \
   -H "Content-Type: application/json" \

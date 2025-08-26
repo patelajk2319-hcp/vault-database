@@ -76,6 +76,8 @@ tasks:
       - docker volume rm {{.STACK_NAME }}_vault-data
       - docker volume rm {{.STACK_NAME }}_vault-logs
       - docker volume rm {{.STACK_NAME }}_redis-data
+      - docker volume rm {{.STACK_NAME }}_kibana-data
+      - docker volume rm {{.STACK_NAME }}_elasticsearch-data
       - rm -rf certs
     ignore_error: true
     vars:
