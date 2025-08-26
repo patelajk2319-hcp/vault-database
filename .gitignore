@@ -39,3 +39,8 @@ terraform.rc
 **/.env
 .idea/
 vault-init.json
+
+# Ignore certs folder
+certs/
+certs/*
+./certs/

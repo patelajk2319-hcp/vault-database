@@ -3,11 +3,17 @@
 # VAULT_LOG_LEVEL=info
 # VAULT_PORT=8200
 
+networks:
+  vault-network:
+    driver: bridge
+
 services:
   vault:
     image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.20-ent}
     container_name: ${COMPOSE_PROJECT_NAME}_vault
     restart: unless-stopped
+    networks:
+      - vault-network
     ports:
       - "${VAULT_PORT:-8200}:8200"
     env_file:
@@ -21,6 +27,10 @@ services:
       - vault-data:/vault/file  # Need this volume to fudge permissions error
       - vault-logs:/vault/logs
       - ./certs:/vault/certs:ro  # Mount certificates directory
+      # Mount individual certificate files for easier access
+      - ./certs/ca/ca.crt:/vault/ca.crt:ro
+      - ./certs/elasticsearch/elasticsearch.crt:/vault/elasticsearch.crt:ro
+      - ./certs/elasticsearch/elasticsearch.key:/vault/elasticsearch.key:ro
     command: server
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8200/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"]
@@ -33,6 +43,8 @@ services:
     image: grafana/grafana:${GRAFANA_VERSION:-latest}
     container_name: ${COMPOSE_PROJECT_NAME}_grafana
     restart: unless-stopped
+    networks:
+      - vault-network
     ports:
       - "3000:3000"
     volumes:
@@ -51,6 +63,8 @@ services:
     image: prom/prometheus:${PROMETHEUS_VERSION:-latest}
     container_name: ${COMPOSE_PROJECT_NAME}_prometheus
     restart: unless-stopped
+    networks:
+      - vault-network
     ports:
       - "9090:9090"
     volumes:
@@ -67,6 +81,8 @@ services:
     image: grafana/loki:${LOKI_VERSION:-latest}
     container_name: ${COMPOSE_PROJECT_NAME}_loki
     restart: unless-stopped
+    networks:
+      - vault-network
     ports:
       - "3100:3100"
     volumes:
@@ -81,6 +97,8 @@ services:
     image: grafana/promtail:${PROMTAIL_VERSION:-latest}
     container_name: ${COMPOSE_PROJECT_NAME}_promtail
     restart: unless-stopped
+    networks:
+      - vault-network
     volumes:
       - ./volumes/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
       - promtail-data:/promtail
@@ -93,12 +111,122 @@ services:
     image: redis:latest
     container_name: ${COMPOSE_PROJECT_NAME}_redis
     restart: unless-stopped
+    networks:
+      - vault-network
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
       - ./redis.conf:/usr/local/etc/redis/redis.conf
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+
+# ELASTIC AND KIBANA - ELK
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: elasticsearch
+    restart: unless-stopped
+    networks:
+      - vault-network
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      # Basic settings
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.enrollment.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+      - ELASTIC_PASSWORD=password123
+      
+      # TLS Configuration
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/elasticsearch.key
+      - xpack.security.http.ssl.certificate=certs/elasticsearch.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca.crt
+      - xpack.security.http.ssl.verification_mode=certificate
+      
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/elasticsearch.key
+      - xpack.security.transport.ssl.certificate=certs/elasticsearch.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      # Mount certificates as read-only
+      - ./certs/ca/ca.crt:/usr/share/elasticsearch/config/certs/ca.crt:ro
+      - ./certs/ca/ca.key:/usr/share/elasticsearch/config/certs/ca.key:ro
+      - ./certs/elasticsearch/elasticsearch.crt:/usr/share/elasticsearch/config/certs/elasticsearch.crt:ro
+      - ./certs/elasticsearch/elasticsearch.key:/usr/share/elasticsearch/config/certs/elasticsearch.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --cacert config/certs/ca.crt -u elastic:password123 https://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Kibana with TLS
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: kibana
+    restart: unless-stopped
+    networks:
+      - vault-network
+    ports:
+      - "5601:5601"
+    environment:
+      # Connect to Elasticsearch via HTTPS
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=kibana_password123
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca.crt
+      - ELASTICSEARCH_SSL_VERIFICATIONMODE=certificate
+      
+      # Enable HTTPS for Kibana
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=config/certs/kibana.crt
+      - SERVER_SSL_KEY=config/certs/kibana.key
+      - SERVER_SSL_CERTIFICATEAUTHORITIES=config/certs/ca.crt
+      
+      # Security settings
+      - XPACK_SECURITY_ENABLED=true
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverpoolfcr
+      - XPACK_REPORTING_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverpoolfcr
+      - XPACK_SECURITY_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverpoolfcr
+    volumes:
+      - kibana-data:/usr/share/kibana/data
+      # Mount certificates as read-only
+      - ./certs/ca/ca.crt:/usr/share/kibana/config/certs/ca.crt:ro
+      - ./certs/kibana/kibana.crt:/usr/share/kibana/config/certs/kibana.crt:ro
+      - ./certs/kibana/kibana.key:/usr/share/kibana/config/certs/kibana.key:ro
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f --cacert config/certs/ca.crt https://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # Setup service - Creates users automatically
+  setup:
+    image: curlimages/curl:latest
+    container_name: elasticsearch-setup
+    networks:
+      - vault-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./scripts/elk/setup-users.sh:/setup.sh:ro
+      - ./certs/ca/ca.crt:/certs/ca.crt:ro
+    command: ["/bin/sh", "/setup.sh"]
+    restart: "no"     
 
 volumes:
   loki-data:
@@ -108,4 +236,5 @@ volumes:
   vault-data:
   vault-logs:
   redis-data:
-
+  elasticsearch-data:
+  kibana-data:

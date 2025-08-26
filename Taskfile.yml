@@ -15,7 +15,11 @@ tasks:
     preconditions:
       - test -f .env
       - test -f docker-compose.yml
+      - test -x ./scripts/elk/create-certs.sh
+      - test -x ./scripts/elk/setup-users.sh
     cmds:
+      - ./scripts/elk/create-certs.sh
+      - sleep 10
       - docker compose up -d --pull=missing
       - sleep 5
       - |
@@ -23,6 +27,7 @@ tasks:
         echo "Prometheus: http://localhost:9090"
         echo "Vault: http://localhost:8200"
         echo "Redis: http://localhost:6379"
+        echo "Elastic: https://localhost:5601"
     silent: true
 
   vault-up:
@@ -71,6 +76,7 @@ tasks:
       - docker volume rm {{.STACK_NAME }}_vault-data
       - docker volume rm {{.STACK_NAME }}_vault-logs
       - docker volume rm {{.STACK_NAME }}_redis-data
+      - rm -rf certs
     ignore_error: true
     vars:
       STACK_NAME:
@@ -132,7 +138,15 @@ tasks:
 
   redis:
     dir: labs/database/redis/
-    dotenv: ['../../../.env']
     cmds:
-      - terraform init -upgrade
-      - terraform apply -auto-approve
+      - source ../../../.env && terraform init -upgrade
+      - source ../../../.env && terraform apply -auto-approve
+
+  elk:
+    dir: labs/database/elk/
+    cmds:
+      - source ../../../.env && terraform init -upgrade
+      - source ../../../.env && terraform apply -auto-approve
+
+
+    
