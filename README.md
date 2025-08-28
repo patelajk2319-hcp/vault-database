@@ -89,3 +89,7 @@ Execute Elasticsearch Terraform to create dynamic users, and migrate static user
 ```shell
 task elk
 ```
+To completely delete the Docker compose stack, e.g. there is a need to start from scratch
+```shell
+task rm
+```
