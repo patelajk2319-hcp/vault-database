@@ -87,5 +87,5 @@ task redis
 ```
 Execute Elasticsearch Terraform to create dynamic users, and migrate static users from Elasticsearch to Vault
 ```shell
-task redis
+task elk
 ```
