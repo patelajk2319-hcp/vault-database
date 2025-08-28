@@ -24,6 +24,7 @@ resource "vault_database_secret_backend_connection" "elk" {
     username = "elastic"
     password = "password123"
     ca_cert  = "/vault/ca.crt"
+    insecure = false
   }
 
   depends_on = [vault_mount.database]

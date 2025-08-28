@@ -44,3 +44,4 @@ vault-init.json
 certs/
 certs/*
 ./certs/
+vault-elk-architecture-diagram.md

@@ -117,8 +117,8 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+      - ./config/redis/redis-users.conf:/usr/local/etc/redis/redis-users.conf
+    command: ["redis-server", "/usr/local/etc/redis/redis-users.conf"]
 
 # ELASTIC AND KIBANA - ELK
   elasticsearch:

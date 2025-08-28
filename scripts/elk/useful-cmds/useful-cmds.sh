@@ -18,8 +18,6 @@ vault write database/config/my-elasticsearch-database \
   allowed_roles="my-dynamic-role, my-static-role"
 
 
-
-
 # create the role to create dynamic creds
 vault write database/roles/my-dynamic-role\
       db_name=my-elasticsearch-database \
@@ -41,3 +39,6 @@ vault read database/static-creds/my-static-role
 #view plugin details
 
 vault read database/elk/my-elk-application/config/my-elk-database   
+
+# Roate root
+vault write -f database/rotate-root/my-elk-database 
