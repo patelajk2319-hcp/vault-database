@@ -8,11 +8,21 @@ This repository contains a docker compose stack with the following services:
 - promtail
 - vault enterprise with raft backend
 - Redis
+- Elasticsearch and Kibana
 
 ## Pre-requisites
+
+Install `Docker` with the following command:
+```shell
+  brew install docker
+```
 Install `taskfile` and `jq` with the following command:
 ```shell
   brew install go-task jq
+```
+Install `terraform` with the following command:
+```shell
+  brew install terraform
 ```
 
 Clone git repository:
@@ -61,6 +71,9 @@ Navigate to the following urls:
 - http://localhost:3000/ - Grafana
 - http://localhost:9090/ - Prometheus
 - http://localhost:8200/ - Vault
+- http://localhost:6379/ - Redis
+- https://localhost:5601/ - Kibana
+- https://localhost:9200/ - Elasticsearch
 
 Execute vault benchmark to test the performance of the vault and generate vault metrics.
 (requires `vault-benchmark` cli tool)
@@ -68,7 +81,15 @@ Execute vault benchmark to test the performance of the vault and generate vault 
 vault namespace create vault-benchmark
 task benchmark
 ```
-Execute Redis Terraform to create dynamic users, and migrate static users from redis to Vault
+Execute Redis Terraform to create dynamic users, and migrate static users from Redis to Vault
 ```shell
 task redis
+```
+Execute Elasticsearch Terraform to create dynamic users, and migrate static users from Elasticsearch to Vault
+```shell
+task elk
+```
+To completely delete the Docker compose stack, e.g. there is a need to start from scratch
+```shell
+task rm
 ```
