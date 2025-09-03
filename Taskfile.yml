@@ -150,7 +150,7 @@ tasks:
       - source ../../../.env && terraform init -upgrade
       - source ../../../.env && terraform apply -auto-approve
 
-  duo-mfa:
+  mfa-duo:
     aliases: ["mfa","duo"]
     dir: labs/mfa/duo/
     cmds:
