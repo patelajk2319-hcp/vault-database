@@ -68,8 +68,12 @@ vault kv put secret/ajaypatel/personal data="User personal data"
 vault kv put secret/shared/company data="Company shared information"
 
 
+#GET all Entity ID
  vault list identity/entity/id
-
+ #Read the Entity Id via the Id
+ vault read identity/entity/id/2e3e0b2e-92d3-7e97-3c9a-89dd6474d734
+ # Read the entity via the username
+ vault read identity/entity/name/ajaypatel
 
 
 
