@@ -75,6 +75,6 @@ resource "vault_identity_mfa_login_enforcement" "duo_enforcement" {
   name                  = "duo_enforcement"
   mfa_method_ids        = [vault_identity_mfa_duo.duo_mfa.method_id]
   auth_method_accessors = [vault_auth_backend.userpass.accessor]
-  auth_method_types     = concat(vault_auth_backend.userpass.type)
+  auth_method_types     = [vault_auth_backend.userpass.type]
 }
 
