@@ -42,8 +42,8 @@ vault read identity/entity/name/ajaypatel
 # OUtputs a method_id - this is required for the Login Enforcement
 
 vault write identity/mfa/method/duo \
-    integration_key=DI8DMHTQMD1TVLKH7WYT \
-    secret_key=cTdGVF7vI76xCClHKVD41k2E95mKTtYD2qKprPHn \
+    integration_key=<ENTER> \
+    secret_key=<ENTER> \
     api_hostname=api-30e6f069.duosecurity.com \
     username_format="{{identity.entity.aliases.auth_userpass_d8cfb58e.name}}" 
 
