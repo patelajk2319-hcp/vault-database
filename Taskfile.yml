@@ -78,6 +78,10 @@ tasks:
       - docker volume rm {{.STACK_NAME }}_redis-data
       - docker volume rm {{.STACK_NAME }}_kibana-data
       - docker volume rm {{.STACK_NAME }}_elasticsearch-data
+      - docker volume rm {{.STACK_NAME }}_vault-audit-logs
+      - docker volume rm {{.STACK_NAME }}_fleet-tokens
+      - docker volume rm {{.STACK_NAME }}_fleet-server-data
+      - docker volume rm {{.STACK_NAME }}_elastic-agent-data
       - rm -rf certs
     ignore_error: true
     vars:
