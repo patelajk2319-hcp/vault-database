@@ -3,17 +3,11 @@
 # VAULT_LOG_LEVEL=info
 # VAULT_PORT=8200
 
-networks:
-  vault-network:
-    driver: bridge
-
 services:
   vault:
     image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.20-ent}
     container_name: ${COMPOSE_PROJECT_NAME}_vault
     restart: unless-stopped
-    networks:
-      - vault-network
     ports:
       - "${VAULT_PORT:-8200}:8200"
     env_file:
@@ -26,6 +20,7 @@ services:
       - ./volumes/vault/raft.hcl:/vault/config/raft.hcl:ro
       - vault-data:/vault/file  # Need this volume to fudge permissions error
       - vault-logs:/vault/logs
+      - vault-audit-logs:/vault/audit  # Volume for audit logs - accessible to elastic agent
       - ./certs:/vault/certs:ro  # Mount certificates directory
       # Mount individual certificate files for easier access
       - ./certs/ca/ca.crt:/vault/ca.crt:ro
@@ -43,8 +38,6 @@ services:
     image: grafana/grafana:${GRAFANA_VERSION:-latest}
     container_name: ${COMPOSE_PROJECT_NAME}_grafana
     restart: unless-stopped
-    networks:
-      - vault-network
     ports:
       - "3000:3000"
     volumes:
@@ -63,8 +56,6 @@ services:
     image: prom/prometheus:${PROMETHEUS_VERSION:-latest}
     container_name: ${COMPOSE_PROJECT_NAME}_prometheus
     restart: unless-stopped
-    networks:
-      - vault-network
     ports:
       - "9090:9090"
     volumes:
@@ -81,8 +72,6 @@ services:
     image: grafana/loki:${LOKI_VERSION:-latest}
     container_name: ${COMPOSE_PROJECT_NAME}_loki
     restart: unless-stopped
-    networks:
-      - vault-network
     ports:
       - "3100:3100"
     volumes:
@@ -97,8 +86,6 @@ services:
     image: grafana/promtail:${PROMTAIL_VERSION:-latest}
     container_name: ${COMPOSE_PROJECT_NAME}_promtail
     restart: unless-stopped
-    networks:
-      - vault-network
     volumes:
       - ./volumes/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
       - promtail-data:/promtail
@@ -111,8 +98,6 @@ services:
     image: redis:latest
     container_name: ${COMPOSE_PROJECT_NAME}_redis
     restart: unless-stopped
-    networks:
-      - vault-network
     ports:
       - "6379:6379"
     volumes:
@@ -120,13 +105,11 @@ services:
       - ./config/redis/redis-users.conf:/usr/local/etc/redis/redis-users.conf
     command: ["redis-server", "/usr/local/etc/redis/redis-users.conf"]
 
-# ELASTIC AND KIBANA - ELK
+# ELASTIC AND KIBANA - ELK (Your original configuration)
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
     container_name: ${COMPOSE_PROJECT_NAME}_elasticsearch
     restart: unless-stopped
-    networks:
-      - vault-network
     ports:
       - "9200:9200"
       - "9300:9300"
@@ -169,13 +152,11 @@ services:
       retries: 10
       start_period: 60s
 
-  # Kibana with TLS
+  # Kibana with TLS (Your original configuration)
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.0
     container_name: ${COMPOSE_PROJECT_NAME}_kibana
     restart: unless-stopped
-    networks:
-      - vault-network
     ports:
       - "5601:5601"
     environment:
@@ -213,12 +194,84 @@ services:
       retries: 5
       start_period: 120s
 
-  # Setup service - Creates users automatically
+  # Fleet initialization service - runs once to set up Fleet
+  fleet-init:
+    image: curlimages/curl:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_fleet_init
+    user: root  # Run as root to fix permission issues
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kibana:
+        condition: service_healthy
+    volumes:
+      - ./scripts/elk/fleet/init-fleet.sh:/init-fleet.sh:ro
+      - ./certs/ca/ca.crt:/certs/ca.crt:ro
+      - fleet-tokens:/tokens  # Shared volume for tokens
+    command: ["/bin/sh", "/init-fleet.sh"]
+    restart: "no"
+    environment:
+      - KIBANA_HOST=https://kibana:5601
+      - KIBANA_USER=elastic
+      - KIBANA_PASSWORD=password123
+      - CA_CERT=/certs/ca.crt
+
+  # Fleet Server with automatic token retrieval
+  fleet-server:
+    image: docker.elastic.co/beats/elastic-agent:8.12.0
+    container_name: ${COMPOSE_PROJECT_NAME}_fleet_server
+    restart: unless-stopped
+    ports:
+      - "8220:8220"
+    user: root
+    depends_on:
+      fleet-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./certs/ca/ca.crt:/certs/ca.crt:ro
+      - fleet-server-data:/usr/share/elastic-agent/state
+      - fleet-tokens:/tokens:ro  # Read tokens from shared volume
+      - ./scripts/elk/fleet/start-fleet-server.sh:/start-fleet-server.sh:ro
+    entrypoint: ["/bin/sh", "/start-fleet-server.sh"]
+    environment:
+      - FLEET_SERVER_ENABLE=1
+      - FLEET_SERVER_ELASTICSEARCH_HOST=https://elasticsearch:9200
+      - FLEET_SERVER_POLICY_ID=fleet-server-policy
+      - FLEET_SERVER_HOST=0.0.0.0
+      - FLEET_SERVER_PORT=8220
+      - FLEET_SERVER_ELASTICSEARCH_USERNAME=elastic
+      - FLEET_SERVER_ELASTICSEARCH_PASSWORD=password123
+      - FLEET_SERVER_ELASTICSEARCH_CA=/certs/ca.crt
+      - FLEET_SERVER_INSECURE_HTTP=true
+      - FLEET_URL=http://fleet-server:8220
+      - KIBANA_FLEET_HOST=https://kibana:5601
+      - KIBANA_FLEET_USERNAME=elastic
+      - KIBANA_FLEET_PASSWORD=password123
+      - KIBANA_FLEET_CA=/certs/ca.crt
+
+  # Elastic Agent with corrected configuration - enrollment handled by post-deployment script
+  elastic-agent:
+    image: docker.elastic.co/beats/elastic-agent:8.12.0
+    container_name: ${COMPOSE_PROJECT_NAME}_elastic_agent
+    restart: unless-stopped
+    user: root
+    depends_on:
+      fleet-server:
+        condition: service_started
+    volumes:
+      - elastic-agent-data:/usr/share/elastic-agent/state
+      - vault-audit-logs:/mnt/vault-audit:ro  # Mount Vault audit logs for collection
+      - fleet-tokens:/tokens:ro  # Needed for post-deployment script access
+      - ./certs/ca/ca.crt:/certs/ca.crt:ro  # CRITICAL: CA certificate for SSL connection
+    environment:
+      - FLEET_URL=http://fleet-server:8220
+      - FLEET_INSECURE=true
+    # Using standard Docker entrypoint - no custom script needed
+
+  # Setup service - Creates users automatically (Your original)
   setup:
     image: curlimages/curl:latest
     container_name: elasticsearch-setup
-    networks:
-      - vault-network
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -235,6 +288,10 @@ volumes:
   promtail-data:
   vault-data:
   vault-logs:
+  vault-audit-logs:  # Shared volume for Vault audit logs between Vault and Elastic Agent
   redis-data:
   elasticsearch-data:
   kibana-data:
+  fleet-server-data:
+  elastic-agent-data:
+  fleet-tokens:  # Shared volume for Fleet tokens
