@@ -105,7 +105,7 @@ services:
       - ./config/redis/redis-users.conf:/usr/local/etc/redis/redis-users.conf
     command: ["redis-server", "/usr/local/etc/redis/redis-users.conf"]
 
-# ELASTIC AND KIBANA - ELK (Your original configuration)
+# ELASTIC AND KIBANA - ELK
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
     container_name: ${COMPOSE_PROJECT_NAME}_elasticsearch
@@ -152,6 +152,19 @@ services:
       retries: 10
       start_period: 60s
 
+   # kibana init service - Creates users automatically
+  kibana-init:
+    image: curlimages/curl:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_kibana-init
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./scripts/elk/10_setup-users.sh:/setup.sh:ro
+      - ./certs/ca/ca.crt:/certs/ca.crt:ro
+    command: ["/bin/sh", "/setup.sh"]
+    restart: "no"          
+
   # Kibana with TLS (Your original configuration)
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.0
@@ -183,9 +196,10 @@ services:
       # Mount certificates as read-only
       - ./certs/ca/ca.crt:/usr/share/kibana/config/certs/ca.crt:ro
       - ./certs/kibana/kibana.crt:/usr/share/kibana/config/certs/kibana.crt:ro
-      - ./certs/kibana/kibana.key:/usr/share/kibana/config/certs/kibana.key:ro
+      - ./certs/kibana/kibana.key:/usr/share/kibana/config/certs/kibana.key:ro    
+      # Make sure the users have been created successfully
     depends_on:
-      setup:
+      kibana-init:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f --cacert config/certs/ca.crt https://localhost:5601/api/status || exit 1"]
@@ -217,6 +231,7 @@ services:
       - CA_CERT=/certs/ca.crt
 
   # Fleet Server with automatic token retrieval
+  # Note tha the Fleet Server use the same image (elastic-agent) as the elastic-agent - This is because the Fleet Server is essentially an agent which will used to manage other agents. 
   fleet-server:
     image: docker.elastic.co/beats/elastic-agent:8.12.0
     container_name: ${COMPOSE_PROJECT_NAME}_fleet_server
@@ -270,18 +285,6 @@ services:
       - FLEET_INSECURE=true
       - ELASTIC_AGENT_LOG_LEVEL=debug  # ADDED: For better debugging
 
-  # Setup service - Creates users automatically
-  setup:
-    image: curlimages/curl:latest
-    container_name: elasticsearch-setup
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    volumes:
-      - ./scripts/elk/10_setup-users.sh:/setup.sh:ro
-      - ./certs/ca/ca.crt:/certs/ca.crt:ro
-    command: ["/bin/sh", "/setup.sh"]
-    restart: "no"     
     
   # Vault creates audit logs with 600 permissions (owner read/write only)
   # Elastic Agent needs 644 permissions (owner read/write, group/others read) to collect logs

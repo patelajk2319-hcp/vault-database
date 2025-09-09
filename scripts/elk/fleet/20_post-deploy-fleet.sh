@@ -1,20 +1,28 @@
 #!/bin/bash
 # post-deploy-fleet.sh
+# This script performs post-deployment configuration for Elastic Fleet after all containers are running.
+# It verifies Fleet Server health, enrolls Elastic Agent if needed, and checks agent status in Kibana.
 
-# Post-deployment script to complete Fleet setup after containers are running
-# Runs as Task (task name: fleet, elk-fleet)
+set -e  # Exit immediately if a command fails
 
-set -e
-
-# Color definitions
+# -----------------------
+# Color definitions for better readability in logs
+# -----------------------
 GREEN='\033[0;32m'    # Green text for success messages
 YELLOW='\033[1;33m'   # Yellow text for warnings
 BLUE='\033[0;34m'     # Blue text for informational messages
-NC='\033[0m'          # No Color - resets text color to default
+NC='\033[0m'          # No Color (reset text color to default)
 
 echo -e "${BLUE}Starting post-deployment Fleet configuration...${NC}"
 
-# Function to check service health
+# -----------------------
+# Function: check_service
+# Checks if a given service is accessible via a URL within a maximum number of attempts
+# Arguments:
+#   1. Service name (for display)
+#   2. Service URL
+#   3. Maximum number of attempts
+# -----------------------
 check_service() {
     local service_name=$1
     local url=$2
@@ -33,7 +41,9 @@ check_service() {
     return 1
 }
 
-# Check Fleet Server
+# -----------------------
+# Check Fleet Server health
+# -----------------------
 if ! check_service "Fleet Server" "http://localhost:8220/api/status" 10; then
     echo -e "${YELLOW}✗ Fleet Server is not responding. Check logs: docker-compose logs fleet-server${NC}"
     exit 1
@@ -41,7 +51,9 @@ fi
 
 echo -e "${GREEN}✓ Fleet Server is healthy${NC}"
 
+# -----------------------
 # Check if Elastic Agent is already enrolled
+# -----------------------
 echo -e "${BLUE}Checking Elastic Agent enrollment status...${NC}"
 AGENT_STATUS=$(docker exec vault-database_elastic_agent elastic-agent status 2>/dev/null || echo "ERROR")
 
@@ -50,7 +62,7 @@ if echo "$AGENT_STATUS" | grep -q "Connected"; then
 else
     echo -e "${BLUE}Enrolling Elastic Agent...${NC}"
     
-    # Get enrollment token
+    # Retrieve the enrollment token from the shared volume
     TOKEN=$(docker run --rm -v vault-database_fleet-tokens:/tokens alpine:latest cat /tokens/enrollment-token 2>/dev/null)
     
     if [ -z "$TOKEN" ]; then
@@ -60,7 +72,7 @@ else
     
     echo -e "${BLUE}Found enrollment token${NC}"
     
-    # Enroll the agent
+    # Enroll the Elastic Agent with Fleet Server
     docker exec vault-database_elastic_agent elastic-agent enroll \
         --url=http://fleet-server:8220 \
         --enrollment-token="$TOKEN" \
@@ -75,7 +87,9 @@ else
     fi
 fi
 
-# Verify both agents are registered in Kibana
+# -----------------------
+# Verify registered agents in Kibana
+# -----------------------
 echo -e "${BLUE}Verifying agents in Kibana...${NC}"
 AGENTS_RESPONSE=$(curl -k -s -X GET "https://localhost:5601/api/fleet/agents" \
     -H "kbn-xsrf: true" \
@@ -87,21 +101,25 @@ if echo "$AGENTS_RESPONSE" | grep -q '"status":"online"'; then
     AGENT_COUNT=$(echo "$AGENTS_RESPONSE" | grep -o '"status":"online"' | wc -l)
     echo -e "${GREEN}✓ Found $AGENT_COUNT online agent(s) in Kibana${NC}"
     
-    # Display agent details
+    # Display basic details for each agent
     echo -e "${BLUE}Agent Details:${NC}"
     echo "$AGENTS_RESPONSE" | jq -r '.list[] | "  - ID: \(.id) | Status: \(.status) | Type: \(.type) | Policy: \(.policy_id)"' 2>/dev/null || echo "  (Raw response parsing failed, but agents are online)"
 else
     echo -e "${YELLOW}⚠ No online agents found in Kibana. This may be normal if agents are still starting up.${NC}"
 fi
 
-# Wait for agent daemon to stabilize after enrollment
+# -----------------------
+# Wait for agent daemon stabilization after enrollment
+# -----------------------
 echo -e "${BLUE}Waiting for agent daemon to stabilize...${NC}"
 sleep 10
 
-# Final status check with improved error handling
+# -----------------------
+# Final status verification
+# -----------------------
 echo -e "${BLUE}Final Fleet status verification...${NC}"
 
-# Check Fleet Server status
+# Check Fleet Server status inside container
 echo -e "${BLUE}Fleet Server Status:${NC}"
 if docker exec vault-database_fleet_server elastic-agent status 2>/dev/null; then
     echo -e "${GREEN}✓ Fleet Server status check successful${NC}"
@@ -131,6 +149,9 @@ if [ "$AGENT_STATUS_SUCCESS" = false ]; then
     echo -e "${YELLOW}Note: Agent daemon status check failed, but this is normal during restart after enrollment${NC}"
 fi
 
+# ----------------------------------
+# Completion message and next steps
+# ----------------------------------
 echo ""
 echo -e "${GREEN}Post-deployment Fleet setup completed!${NC}"
 echo ""
