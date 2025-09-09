@@ -1,6 +1,8 @@
 #!/bin/bash
 # post-deploy-fleet.sh
+
 # Post-deployment script to complete Fleet setup after containers are running
+# Runs as Task (task name: fleet, elk-fleet)
 
 set -e
 
@@ -134,4 +136,5 @@ echo ""
 echo "Useful commands:"
 echo "  - Check Fleet agents: curl -k https://localhost:5601/api/fleet/agents -H 'kbn-xsrf: true' -u elastic:password123 --cacert certs/ca/ca.crt"
 echo "  - View agent logs: docker-compose logs elastic-agent"
+echo "  - View agent status: docker exec vault-database_elastic_agent elastic-agent status" 
 echo "  - Fleet Server status: curl -k http://localhost:8220/api/status"

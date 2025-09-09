@@ -17,7 +17,7 @@ resource "vault_database_secret_backend_connection" "elk" {
     "vault-static-user-*-role" # this is importatant. the star ensures that future static roles can be added - providing they can follow the confention - 
   ])
 
-  rotation_period = 20 # Rotate the credential after this period in seconds - for dev & testing leave this out
+  //rotation_period = 20 # Rotate the credential after this period in seconds - for dev & testing leave this out
 
   elasticsearch {
     url      = "https://elasticsearch:9200"

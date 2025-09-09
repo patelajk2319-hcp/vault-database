@@ -205,10 +205,10 @@ services:
       kibana:
         condition: service_healthy
     volumes:
-      - ./scripts/elk/fleet/init-fleet.sh:/init-fleet.sh:ro
+      - ./scripts/elk/fleet/00_init-fleet.sh:/00_init-fleet.sh:ro
       - ./certs/ca/ca.crt:/certs/ca.crt:ro
       - fleet-tokens:/tokens  # Shared volume for tokens
-    command: ["/bin/sh", "/init-fleet.sh"]
+    command: ["/bin/sh", "/00_init-fleet.sh"]
     restart: "no"
     environment:
       - KIBANA_HOST=https://kibana:5601
@@ -231,8 +231,8 @@ services:
       - ./certs/ca/ca.crt:/certs/ca.crt:ro
       - fleet-server-data:/usr/share/elastic-agent/state
       - fleet-tokens:/tokens:ro  # Read tokens from shared volume
-      - ./scripts/elk/fleet/start-fleet-server.sh:/start-fleet-server.sh:ro
-    entrypoint: ["/bin/sh", "/start-fleet-server.sh"]
+      - ./scripts/elk/fleet/10_start-fleet-server.sh:/10_start-fleet-server.sh:ro
+    entrypoint: ["/bin/sh", "/10_start-fleet-server.sh"]
     environment:
       - FLEET_SERVER_ENABLE=1
       - FLEET_SERVER_ELASTICSEARCH_HOST=https://elasticsearch:9200
@@ -258,17 +258,19 @@ services:
     depends_on:
       fleet-server:
         condition: service_started
+      vault-permissions:  # Wait for permission fix to complete
+        condition: service_completed_successfully
     volumes:
       - elastic-agent-data:/usr/share/elastic-agent/state
-      - vault-audit-logs:/mnt/vault-audit:ro  # Mount Vault audit logs for collection
-      - fleet-tokens:/tokens:ro  # Needed for post-deployment script access
-      - ./certs/ca/ca.crt:/certs/ca.crt:ro  # CRITICAL: CA certificate for SSL connection
+      - vault-logs:/mnt/vault-logs:ro         # Vault operational logs
+      - fleet-tokens:/tokens:ro
+      - ./certs/ca/ca.crt:/certs/ca.crt:ro
     environment:
       - FLEET_URL=http://fleet-server:8220
       - FLEET_INSECURE=true
-    # Using standard Docker entrypoint - no custom script needed
+      - ELASTIC_AGENT_LOG_LEVEL=debug  # ADDED: For better debugging
 
-  # Setup service - Creates users automatically (Your original)
+  # Setup service - Creates users automatically
   setup:
     image: curlimages/curl:latest
     container_name: elasticsearch-setup
@@ -280,6 +282,28 @@ services:
       - ./certs/ca/ca.crt:/certs/ca.crt:ro
     command: ["/bin/sh", "/setup.sh"]
     restart: "no"     
+    
+  # Vault creates audit logs with 600 permissions (owner read/write only)
+  # Elastic Agent needs 644 permissions (owner read/write, group/others read) to collect logs
+  vault-permissions:
+    image: alpine:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_vault_permissions
+    user: root  # Required to change file permissions
+    volumes:
+      - vault-logs:/vault-logs  # Mount same volume as Vault to access log files
+    command: >
+      sh -c "
+        echo 'Waiting for Vault to create audit log files...' &&
+        sleep 10 &&
+        echo 'Fixing permissions on Vault log files...' &&
+        chmod -f 644 /vault-logs/*.log 2>/dev/null || true &&
+        echo 'Vault log permissions fixed - Elastic Agent can now read audit logs'
+      "
+    restart: "no"  # Run once and exit
+    depends_on:
+      vault:
+        condition: service_started  # Wait for Vault to start creating log files
+
 
 volumes:
   loki-data:

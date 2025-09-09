@@ -1,5 +1,7 @@
 #!/bin/sh
 # scripts/elk/fleet/init-fleet.sh
+
+# runs in docker - check docker compose file - service:fleet-init:
 set -e
 
 echo "Initializing Fleet setup..."
@@ -25,6 +27,38 @@ curl -k -s -X POST "$KIBANA_HOST/api/fleet/setup" \
   --cacert "$CA_CERT" || echo "Fleet may already be initialized"
 
 sleep 5
+
+# Configure the default Elasticsearch output with correct settings
+echo "Configuring default Elasticsearch output..."
+curl -k -s -X POST "$KIBANA_HOST/api/fleet/outputs" \
+  -H "kbn-xsrf: true" \
+  -H "Content-Type: application/json" \
+  -u "$KIBANA_USER:$KIBANA_PASSWORD" \
+  --cacert "$CA_CERT" \
+  -d '{
+    "id": "fleet-default-output",
+    "name": "default",
+    "type": "elasticsearch",
+    "is_default": true,
+    "hosts": ["https://elasticsearch:9200"],
+    "config_yaml": "ssl.certificate_authorities: [\"/certs/ca.crt\"]\nssl.verification_mode: certificate"
+  }' || echo "Default output may already exist - attempting update..."
+
+# If creation failed, try updating the existing default output
+echo "Ensuring default output has correct configuration..."
+curl -k -s -X PUT "$KIBANA_HOST/api/fleet/outputs/fleet-default-output" \
+  -H "kbn-xsrf: true" \
+  -H "Content-Type: application/json" \
+  -u "$KIBANA_USER:$KIBANA_PASSWORD" \
+  --cacert "$CA_CERT" \
+  -d '{
+    "name": "default",
+    "type": "elasticsearch",
+    "hosts": ["https://elasticsearch:9200"],
+    "config_yaml": "ssl.certificate_authorities: [\"/certs/ca.crt\"]\nssl.verification_mode: certificate"
+  }' || echo "Output configuration update completed"
+
+sleep 3
 
 # Create Fleet Server service token
 echo "Creating Fleet Server service token..."

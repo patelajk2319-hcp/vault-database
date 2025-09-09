@@ -158,18 +158,24 @@ tasks:
       - source ../../../.env && terraform apply -auto-approve     
 
   elk-fleet:
-      aliases: ["fleet"]
-      preconditions:
-        - test -x ./scripts/elk/fleet/post-deploy-fleet.sh
-      cmds:
-        - |
-          echo "Waiting for containers to stabilize..."
-          for i in {60..10}; do
-            echo -ne "\rTime remaining: ${i}s "
-            sleep 1
-          done
-          echo -e "\nStarting Fleet configuration..."
-        - ./scripts/elk/fleet/post-deploy-fleet.sh
+    aliases: ["fleet"]
+    preconditions:
+      - test -x ./scripts/elk/fleet/20_post-deploy-fleet.sh
+    vars:
+      delay: '{{.delay | default 30}}' # Default is 30 seconds
+    cmds:
+      - |
+        echo "Waiting for containers to stabilize..."
+        i={{.delay}}
+        while [ $i -ge 0 ]; do
+          printf "\rTime remaining: %02ds" "$i"
+          sleep 1
+          i=$((i-1))
+        done
+        echo -e "\nStarting Fleet configuration..."
+      - ./scripts/elk/fleet/20_post-deploy-fleet.sh
+
+
 
 
     
