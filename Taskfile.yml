@@ -179,6 +179,14 @@ tasks:
         echo -e "\nStarting Fleet configuration..."
       - ./scripts/elk/fleet/20_post-deploy-fleet.sh
 
+  elk-audit-logs:
+    aliases: ["logging", "audit", "audit-logs", "audit-logs-elk"]
+    deps: ["elk-fleet"]  # This will run elk-fleet first
+    preconditions:
+      - test -x ./scripts/elk/fleet/30_vault-elk-integration.sh
+    cmds:
+      - sleep 10
+      - ./scripts/elk/fleet/30_vault-elk-integration.sh
 
 
 
