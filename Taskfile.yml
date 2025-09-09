@@ -15,10 +15,10 @@ tasks:
     preconditions:
       - test -f .env
       - test -f docker-compose.yml
-      - test -x ./scripts/elk/create-certs.sh
-      - test -x ./scripts/elk/setup-users.sh
+      - test -x ./scripts/elk/00_create-certs.sh
+      - test -x ./scripts/elk/10_setup-users.sh
     cmds:
-      - ./scripts/elk/create-certs.sh
+      - ./scripts/elk/00_create-certs.sh
       - sleep 10
       - docker compose up -d --pull=missing
       - sleep 5
@@ -169,7 +169,7 @@ tasks:
       delay: '{{.delay | default 30}}' # Default is 30 seconds
     cmds:
       - |
-        echo "Waiting for containers to stabilize..."
+        echo "Waiting for containers to stabilise..."
         i={{.delay}}
         while [ $i -ge 0 ]; do
           printf "\rTime remaining: %02ds" "$i"

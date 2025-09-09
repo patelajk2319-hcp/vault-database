@@ -278,7 +278,7 @@ services:
       elasticsearch:
         condition: service_healthy
     volumes:
-      - ./scripts/elk/setup-users.sh:/setup.sh:ro
+      - ./scripts/elk/10_setup-users.sh:/setup.sh:ro
       - ./certs/ca/ca.crt:/certs/ca.crt:ro
     command: ["/bin/sh", "/setup.sh"]
     restart: "no"     
