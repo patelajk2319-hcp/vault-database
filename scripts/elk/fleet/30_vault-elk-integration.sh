@@ -1,6 +1,7 @@
 #!/bin/bash
-# scripts/elk/install-vault-integration.sh
-# Standalone script to install HashiCorp Vault integration in Fleet
+# Standalone script to install HashiCorp Vault integration in Fleet (ELK)
+# Check the Vault Integration in the UI: "Logs from file (Audit) = /mnt/vault-logs/vault_audit.log" - This is important
+# Check the Vault Integration in the UI: "Logs from file (Operation) = /mnt/vault-logs/*.json" - This is important
 
 set -e
 
