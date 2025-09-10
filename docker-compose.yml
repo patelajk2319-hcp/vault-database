@@ -300,7 +300,7 @@ services:
         sleep 10 &&
         echo 'Fixing permissions on Vault log files...' &&
         chmod -f 644 /vault-logs/*.log 2>/dev/null || true &&
-        echo 'Vault log permissions fixed - Elastic Agent can now read audit logs'
+        echo 'Vault log permissions granted - Elastic Agent can now read audit logs'
       "
     restart: "no"  # Run once and exit
     depends_on:
