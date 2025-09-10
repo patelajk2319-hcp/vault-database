@@ -1,4 +1,4 @@
-# docker-vault-redis-stack
+# docker-vault-database-stack
 
 ## Description
 This repository contains a docker compose stack with the following services:
