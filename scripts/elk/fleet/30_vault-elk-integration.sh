@@ -125,7 +125,7 @@ create_integration_with_metrics() {
                 },
                 \"vars\": {
                   \"paths\": {
-                    \"value\": [\"/mnt/vault-logs/*.log\"],
+                    \"value\": [\"/mnt/vault-logs/vault_audit.log\"],
                     \"type\": \"text\"
                   },
                   \"tags\": {
@@ -244,7 +244,7 @@ create_integration_logs_only() {
                 },
                 \"vars\": {
                   \"paths\": {
-                    \"value\": [\"/mnt/vault-logs/*.log\"],
+                    \"value\": [\"/mnt/vault-logs/vault_audit.log\"],
                     \"type\": \"text\"
                   },
                   \"tags\": {
@@ -326,7 +326,7 @@ echo ""
 echo -e "${GREEN}=== Integration Installation Complete ===${NC}"
 echo ""
 echo -e "${BLUE}Configuration:${NC}"
-echo -e "${BLUE}- Audit logs: /mnt/vault-logs/*.log${NC}"
+echo -e "${BLUE}- Audit logs: /mnt/vault-logs/vault_audit.log${NC}"
 echo -e "${BLUE}- Operation logs: /mnt/vault-logs/*.json${NC}"
 
 if [ "$METRICS_ENABLED" = true ]; then
