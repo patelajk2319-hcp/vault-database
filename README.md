@@ -9,6 +9,8 @@ This repository contains a docker compose stack with the following services:
 - vault enterprise with raft backend
 - Redis
 - Elasticsearch and Kibana
+- Elastic Agent and Fleet Server for Log Vault Aggregation
+- DUO MFA
 
 ## Pre-requisites
 
@@ -40,6 +42,9 @@ If you do not have an enterprise license, you can request a trial license from t
 https://www.hashicorp.com/products/vault/trial
 
 Alternatively, you can use the Vault BSL container image by changing the [docker-compose.yml](docker-compose.yml) file to use the `hashicorp/vault-enterprise:1.19` image.
+
+If you do not have a DUO licence, you can request a trial from the following link:
+https://signup.duo.com/
 
 ## Usage
 [Taskfile.yml](Taskfile.yml) contains automation commands to manage the stack.
@@ -88,6 +93,14 @@ task redis
 Execute Elasticsearch Terraform to create dynamic users, and migrate static users from Elasticsearch to Vault
 ```shell
 task elk
+```
+Execute DUO Terraform to create a userpass user with MFA, you will need to have a user setup in DUO which matches the Vault Userpass user for this to work
+```shell
+task duo
+```
+To enable log aggregation so that Vault logs are sent to Elasticsearch (you must have run task elk and have Elastic and Kibana running before running this command)
+```shell
+task audit-logs
 ```
 To completely delete the Docker compose stack, e.g. there is a need to start from scratch
 ```shell
