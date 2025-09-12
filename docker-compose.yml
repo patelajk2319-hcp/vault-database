@@ -26,7 +26,11 @@ services:
       - ./certs/ca/ca.crt:/vault/ca.crt:ro
       - ./certs/elasticsearch/elasticsearch.crt:/vault/elasticsearch.crt:ro
       - ./certs/elasticsearch/elasticsearch.key:/vault/elasticsearch.key:ro
+      - vault-kerberos-data:/vault/kerberos:ro
     command: server
+    depends_on:
+      kerberos-keytab-extractor:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8200/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"]
       interval: 5s
@@ -78,7 +82,6 @@ services:
       - ./volumes/loki/loki.yml:/etc/loki/loki.yml:ro
       - loki-data:/loki/data
       - ./volumes/loki/loki_perm_fix.sh:/loki/loki_perm_fix.sh:ro
-#    command: -config.file=/etc/loki/loki.yml
     entrypoint: /loki/loki_perm_fix.sh
     user: root # Required for permission fix as Loki runs as user Loki by default
 
@@ -105,7 +108,7 @@ services:
       - ./config/redis/redis-users.conf:/usr/local/etc/redis/redis-users.conf
     command: ["redis-server", "/usr/local/etc/redis/redis-users.conf"]
 
-# ELASTIC AND KIBANA - ELK
+  # ELASTIC AND KIBANA - ELK
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
     container_name: ${COMPOSE_PROJECT_NAME}_elasticsearch
@@ -152,7 +155,7 @@ services:
       retries: 10
       start_period: 60s
 
-   # kibana init service - Creates users automatically
+  # kibana init service - Creates users automatically
   kibana-init:
     image: curlimages/curl:latest
     container_name: ${COMPOSE_PROJECT_NAME}_kibana-init
@@ -285,7 +288,6 @@ services:
       - FLEET_INSECURE=true
       - ELASTIC_AGENT_LOG_LEVEL=debug  # ADDED: For better debugging
 
-    
   # Vault creates audit logs with 600 permissions (owner read/write only)
   # Elastic Agent needs 644 permissions (owner read/write, group/others read) to collect logs
   vault-permissions:
@@ -307,6 +309,64 @@ services:
       vault:
         condition: service_started  # Wait for Vault to start creating log files
 
+  kerberos-kdc:
+    image: ubuntu:20.04
+    container_name: ${COMPOSE_PROJECT_NAME}_kerberos_kdc
+    hostname: kdc.example.com
+    restart: unless-stopped
+    ports:
+      - "88:88/tcp"
+      - "88:88/udp" 
+      - "464:464/tcp"
+      - "464:464/udp"
+      - "749:749/tcp"
+    environment:
+      - KRB5_REALM=EXAMPLE.COM
+      - KRB5_KDC=kdc.example.com
+      - KRB5_PASS=admin123
+      - DEBIAN_FRONTEND=noninteractive
+    volumes:
+      # ONLY mount the script - no config files
+      - ./scripts/kerberos/init-kdc.sh:/init-kdc.sh:ro
+      - kerberos-data:/var/lib/krb5kdc
+    command: ["/init-kdc.sh"]
+    # Add healthcheck to ensure KDC is fully ready
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep krb5kdc && test -f /var/lib/krb5kdc/vault.keytab"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  kerberos-client:
+    image: ubuntu:20.04
+    container_name: ${COMPOSE_PROJECT_NAME}_kerberos_client
+    hostname: client.example.com  # Client hostname in the Kerberos domain
+    restart: unless-stopped
+    environment:
+      - DEBIAN_FRONTEND=noninteractive   # Prevent interactive prompts during package installation
+    depends_on:
+      - kerberos-kdc  # Wait for KDC to be available before starting
+    volumes:
+      # Mount the same Kerberos config so client knows how to find the KDC
+      - ./scripts/kerberos/krb5.conf:/etc/krb5.conf:ro
+      # Mount test scripts for validating Kerberos authentication
+      - ./scripts/kerberos/tests/test-auth.sh:/test-auth.sh:ro
+      - ./scripts/kerberos/setup-client.sh:/setup-client.sh:ro
+    command: ["/setup-client.sh"]  # Install Kerberos client and keep running
+
+  kerberos-keytab-extractor:
+    image: alpine:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_kerberos_keytab_extractor
+    depends_on:
+      kerberos-kdc:
+        condition: service_healthy  # Wait for KDC to be fully healthy
+    volumes:
+      - kerberos-data:/kdc-data:ro
+      - vault-kerberos-data:/vault-kerberos
+      - ./scripts/kerberos/extract-keytab.sh:/extract-keytab.sh:ro
+    command: ["sh", "-c", "apk add --no-cache bash && /extract-keytab.sh"]
+    restart: "no"
 
 volumes:
   loki-data:
@@ -322,3 +382,5 @@ volumes:
   fleet-server-data:
   elastic-agent-data:
   fleet-tokens:  # Shared volume for Fleet tokens
+  kerberos-data: # Shared volume for kerberos data
+  vault-kerberos-data:

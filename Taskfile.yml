@@ -17,7 +17,12 @@ tasks:
       - test -f docker-compose.yml
       - test -x ./scripts/elk/00_create-certs.sh
       - test -x ./scripts/elk/10_setup-users.sh
+      - test -x ./scripts/kerberos/extract-keytab.sh
     cmds:
+      - chmod +x ./scripts/kerberos/extract-keytab.sh
+      - chmod +x ./scripts/kerberos/init-kdc.sh       
+      - chmod +x ./scripts/kerberos/setup-client.sh
+      - chmod +x ./scripts/kerberos/tests/test-auth.sh
       - ./scripts/elk/00_create-certs.sh
       - sleep 10
       - docker compose up -d --pull=missing
@@ -82,6 +87,7 @@ tasks:
       - docker volume rm {{.STACK_NAME }}_fleet-tokens
       - docker volume rm {{.STACK_NAME }}_fleet-server-data
       - docker volume rm {{.STACK_NAME }}_elastic-agent-data
+      - docker volume rm {{.STACK_NAME }}_kerberos_kdc
       - rm -rf certs
     ignore_error: true
     vars:
@@ -187,6 +193,39 @@ tasks:
     cmds:
       - sleep 10
       - ./scripts/elk/fleet/30_vault-elk-integration.sh
+
+  test-kerberos:
+    desc: Test Kerberos authentication
+    cmds:
+      - |
+        echo "🔍 Testing Kerberos setup..."
+        
+        # Test 1: Check KDC is running
+        if docker-compose exec kerberos-kdc ps aux | grep -q krb5kdc; then
+          echo "✅ KDC process running"
+        else
+          echo "❌ KDC not running"
+          exit 1
+        fi
+        
+        # Test 2: Test authentication
+        if echo "admin123" | docker-compose exec -T kerberos-client kinit admin/admin@EXAMPLE.COM 2>/dev/null; then
+          echo "✅ Authentication working"
+          docker-compose exec kerberos-client klist | head -3
+          docker-compose exec kerberos-client kdestroy
+        else
+          echo "❌ Authentication failed"
+          exit 1
+        fi
+        
+        # Test 3: Check keytab extraction
+        if docker-compose exec vault test -f /vault/kerberos/vault.keytab 2>/dev/null; then
+          echo "✅ Keytab available to Vault"
+        else
+          echo "⚠️  Keytab not found in Vault"
+        fi
+        
+        echo "🎉 Kerberos is ready for Vault integration!"     
 
 
 

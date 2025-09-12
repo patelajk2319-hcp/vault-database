@@ -1,0 +1,9 @@
+# ============================================================================
+# KERBEROS ADMIN ACCESS CONTROL LIST (kadm5.acl)
+# This file defines who can perform administrative operations on the KDC
+# Format: principal_pattern permissions [target_principal_pattern]
+# ============================================================================
+
+# Grant all administrative privileges (*) to any principal ending with /admin
+# This allows admin/admin@EXAMPLE.COM to manage all principals and policies
+*/admin@EXAMPLE.COM    *
